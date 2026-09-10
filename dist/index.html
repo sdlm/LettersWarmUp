@@ -8,16 +8,14 @@
 :root {
   --bg: #ffffff;
   --fg: #111111;
-  --muted: #9a9a9a;
-  --active: #111111;
+  --muted: #767676;
   --button-bg: #f0f0f0;
 }
 
 [data-theme="dark"] {
   --bg: #0b0b0b;
   --fg: #f2f2f2;
-  --muted: #6b6b6b;
-  --active: #f2f2f2;
+  --muted: #7a7a7a;
   --button-bg: #1e1e1e;
 }
 
@@ -37,12 +35,14 @@ body {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .app {
   display: flex;
   flex-direction: column;
-  height: 100dvh;
+  height: 100%;    /* pre-15.4 Safari: resolves through html/body */
+  height: 100dvh;  /* modern: tracks the collapsing toolbar */
   padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
 }
 
@@ -68,7 +68,7 @@ body {
 }
 
 .alphabet-toggle.active {
-  color: var(--active);
+  color: var(--fg);
 }
 
 .theme-toggle {
@@ -86,7 +86,8 @@ body {
 }
 
 .letter {
-  font-size: min(40vh, 55vw);
+  font-size: min(40vh, 55vw);   /* fallback for pre-15.4 Safari */
+  font-size: min(40dvh, 55vw);
   line-height: 1;
   animation: fade-in 150ms ease-out;
 }
@@ -129,21 +130,21 @@ body {
 </head>
 <body>
 <div class="app">
-  <header class="toggle-row">
+  <div class="toggle-row">
     <button type="button" id="alphabet-ru" class="alphabet-toggle">RU</button>
-    <button type="button" id="alphabet-en" class="alphabet-toggle">en</button>
+    <button type="button" id="alphabet-en" class="alphabet-toggle">EN</button>
     <button type="button" id="theme-toggle" class="theme-toggle" aria-label="Переключить тему"></button>
-  </header>
+  </div>
 
   <main class="letter-area">
     <div id="letter" class="letter"></div>
     <div id="timer" class="timer"></div>
   </main>
 
-  <footer class="button-row">
+  <div class="button-row">
     <button type="button" id="know-button" class="answer-button">Знаю</button>
     <button type="button" id="dont-know-button" class="answer-button">Не знаю</button>
-  </footer>
+  </div>
 </div>
 <script>
 const ALPHABETS = {
@@ -218,6 +219,8 @@ let currentTheme = "light";
 let currentLetter = null;
 let timerStartedAt = 0;
 
+let elements = null;
+
 function readStorage(key, allowedValues, fallback) {
   try {
     const value = localStorage.getItem(key);
@@ -245,18 +248,34 @@ function getSession(alphabet) {
   return sessions[alphabet];
 }
 
+function requireElement(id) {
+  const el = document.getElementById(id);
+  if (!el) {
+    throw new Error(`LettersWarmUp: missing required element #${id}`);
+  }
+  return el;
+}
+
+function collectElements() {
+  return {
+    alphabetRu: requireElement("alphabet-ru"),
+    alphabetEn: requireElement("alphabet-en"),
+    themeToggle: requireElement("theme-toggle"),
+    letter: requireElement("letter"),
+    timer: requireElement("timer"),
+    knowButton: requireElement("know-button"),
+    dontKnowButton: requireElement("dont-know-button"),
+  };
+}
+
 function applyTheme(theme) {
-  currentTheme = theme;
   document.documentElement.setAttribute("data-theme", theme);
-  const themeToggle = document.getElementById("theme-toggle");
-  themeToggle.textContent = theme === "dark" ? "☾" : "☼";
+  elements.themeToggle.textContent = theme === "dark" ? "☾" : "☼";
 }
 
 function applyAlphabetToggle(alphabet) {
-  const ruToggle = document.getElementById("alphabet-ru");
-  const enToggle = document.getElementById("alphabet-en");
-  ruToggle.classList.toggle("active", alphabet === "ru");
-  enToggle.classList.toggle("active", alphabet === "en");
+  elements.alphabetRu.classList.toggle("active", alphabet === "ru");
+  elements.alphabetEn.classList.toggle("active", alphabet === "en");
 }
 
 function showNextLetter() {
@@ -264,7 +283,7 @@ function showNextLetter() {
   const letters = ALPHABETS[currentAlphabet];
   currentLetter = pickNext(session, letters, Date.now(), Math.random);
 
-  const letterEl = document.getElementById("letter");
+  const letterEl = elements.letter;
   letterEl.textContent = currentLetter;
   letterEl.style.animation = "none";
   // Force reflow so the animation restarts.
@@ -280,7 +299,7 @@ function restartTimer() {
 }
 
 function updateTimerDisplay() {
-  const timerEl = document.getElementById("timer");
+  const timerEl = elements.timer;
   const elapsedSeconds = (Date.now() - timerStartedAt) / 1000;
   const remaining = Math.ceil(TIMER_SECONDS - elapsedSeconds);
 
@@ -292,9 +311,9 @@ function updateTimerDisplay() {
   }
 }
 
-function answer(result) {
+function handleAnswer(answer) {
   const session = getSession(currentAlphabet);
-  recordAnswer(session, currentLetter, result, Date.now());
+  recordAnswer(session, currentLetter, answer, Date.now());
   showNextLetter();
 }
 
@@ -310,22 +329,25 @@ function switchAlphabet(alphabet) {
 
 function toggleTheme() {
   const nextTheme = currentTheme === "light" ? "dark" : "light";
+  currentTheme = nextTheme;
   writeStorage("lw.theme", nextTheme);
   applyTheme(nextTheme);
 }
 
 function init() {
+  elements = collectElements();
+
   currentAlphabet = readStorage("lw.alphabet", ["ru", "en"], "ru");
   currentTheme = readStorage("lw.theme", ["light", "dark"], "light");
 
   applyTheme(currentTheme);
   applyAlphabetToggle(currentAlphabet);
 
-  document.getElementById("alphabet-ru").addEventListener("click", () => switchAlphabet("ru"));
-  document.getElementById("alphabet-en").addEventListener("click", () => switchAlphabet("en"));
-  document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
-  document.getElementById("know-button").addEventListener("click", () => answer("know"));
-  document.getElementById("dont-know-button").addEventListener("click", () => answer("dont_know"));
+  elements.alphabetRu.addEventListener("click", () => switchAlphabet("ru"));
+  elements.alphabetEn.addEventListener("click", () => switchAlphabet("en"));
+  elements.themeToggle.addEventListener("click", toggleTheme);
+  elements.knowButton.addEventListener("click", () => handleAnswer("know"));
+  elements.dontKnowButton.addEventListener("click", () => handleAnswer("dont_know"));
 
   showNextLetter();
   setInterval(updateTimerDisplay, TIMER_TICK_MS);
