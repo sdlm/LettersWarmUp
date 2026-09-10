@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Алфавит</title>
+<style>
+:root {
+  --bg: #ffffff;
+  --fg: #111111;
+  --muted: #9a9a9a;
+  --active: #111111;
+  --button-bg: #f0f0f0;
+}
+
+[data-theme="dark"] {
+  --bg: #0b0b0b;
+  --fg: #f2f2f2;
+  --muted: #6b6b6b;
+  --active: #f2f2f2;
+  --button-bg: #1e1e1e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+.alphabet-toggle,
+.theme-toggle {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 4px;
+  margin: 0;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  touch-action: manipulation;
+}
+
+.alphabet-toggle.active {
+  color: var(--active);
+}
+
+.theme-toggle {
+  margin-left: auto;
+  font-size: 20px;
+}
+
+.letter-area {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+
+.letter {
+  font-size: min(40vh, 55vw);
+  line-height: 1;
+  animation: fade-in 150ms ease-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.timer {
+  font-size: 20px;
+  color: var(--muted);
+  margin-top: 8px;
+}
+
+.button-row {
+  display: flex;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+.answer-button {
+  flex: 1 1 0;
+  min-height: 72px;
+  border: none;
+  border-radius: 12px;
+  background: var(--button-bg);
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 20px;
+  font-weight: 600;
+  touch-action: manipulation;
+}
+
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="toggle-row">
+    <button type="button" id="alphabet-ru" class="alphabet-toggle">RU</button>
+    <button type="button" id="alphabet-en" class="alphabet-toggle">en</button>
+    <button type="button" id="theme-toggle" class="theme-toggle" aria-label="Переключить тему"></button>
+  </header>
+
+  <main class="letter-area">
+    <div id="letter" class="letter"></div>
+    <div id="timer" class="timer"></div>
+  </main>
+
+  <footer class="button-row">
+    <button type="button" id="know-button" class="answer-button">Знаю</button>
+    <button type="button" id="dont-know-button" class="answer-button">Не знаю</button>
+  </footer>
+</div>
+<script>
+const ALPHABETS = {
+  ru: "АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ".split(""),  // 32 letters, no Ё
+  en: "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""),        // 26 letters
+};
+// Picks the next letter to practice. Each letter gets a weight w = t * k:
+//   t = seconds since the letter was last closed (0 if it was just shown)
+//   k = difficulty multiplier (2 if the child didn't know it, 0.5 if they did)
+// Probability of a letter is w / sum(w). No DOM, no clock, no storage:
+// `nowMs` and `rng` are injected so this module is deterministic under test.
+
+function createSession() {
+  return { history: {}, lastShown: null };
+}
+
+function recordAnswer(state, letter, answer, nowMs) {
+  state.history[letter] = { answer, closedAt: nowMs };
+  state.lastShown = letter;
+}
+
+function computeWeights(state, letters, nowMs) {
+  return letters.map((letter) => {
+    if (letter === state.lastShown) {
+      return { letter, t: 0, k: 1, w: 0 };
+    }
+    const entry = state.history[letter];
+    if (!entry) {
+      // Unseen letter: treat it as if it had been idle five minutes.
+      const t = 5 * 60;
+      return { letter, t, k: 1, w: t };
+    }
+    // Clamp at 0: a clock that has moved backwards (NTP correction, a
+    // child in the date settings) must never produce a negative weight.
+    const t = Math.max(0, (nowMs - entry.closedAt) / 1000);
+    // Anything other than "dont_know" (i.e. "know") is treated as known.
+    const k = entry.answer === "dont_know" ? 2 : 0.5;
+    return { letter, t, k, w: t * k };
+  });
+}
+
+function pickNext(state, letters, nowMs, rng) {
+  const weights = computeWeights(state, letters, nowMs);
+  const total = weights.reduce((sum, x) => sum + x.w, 0);
+
+  if (total === 0) {
+    const index = Math.floor(rng() * letters.length);
+    return letters[index];
+  }
+
+  const r = rng() * total;
+  let running = 0;
+  let lastNonZero = null;
+  for (const x of weights) {
+    if (x.w > 0) {
+      lastNonZero = x.letter;
+    }
+    running += x.w;
+    if (running > r) {
+      return x.letter;
+    }
+  }
+  return lastNonZero;
+}
+
+const TIMER_SECONDS = 5;
+const TIMER_TICK_MS = 250;
+
+const sessions = {};
+let currentAlphabet = "ru";
+let currentTheme = "light";
+let currentLetter = null;
+let timerStartedAt = 0;
+
+function readStorage(key, allowedValues, fallback) {
+  try {
+    const value = localStorage.getItem(key);
+    if (allowedValues.includes(value)) {
+      return value;
+    }
+  } catch (err) {
+    // localStorage unavailable (e.g. private mode) — use fallback.
+  }
+  return fallback;
+}
+
+function writeStorage(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch (err) {
+    // localStorage unavailable (e.g. private mode) — ignore.
+  }
+}
+
+function getSession(alphabet) {
+  if (!sessions[alphabet]) {
+    sessions[alphabet] = createSession();
+  }
+  return sessions[alphabet];
+}
+
+function applyTheme(theme) {
+  currentTheme = theme;
+  document.documentElement.setAttribute("data-theme", theme);
+  const themeToggle = document.getElementById("theme-toggle");
+  themeToggle.textContent = theme === "dark" ? "☾" : "☼";
+}
+
+function applyAlphabetToggle(alphabet) {
+  const ruToggle = document.getElementById("alphabet-ru");
+  const enToggle = document.getElementById("alphabet-en");
+  ruToggle.classList.toggle("active", alphabet === "ru");
+  enToggle.classList.toggle("active", alphabet === "en");
+}
+
+function showNextLetter() {
+  const session = getSession(currentAlphabet);
+  const letters = ALPHABETS[currentAlphabet];
+  currentLetter = pickNext(session, letters, Date.now(), Math.random);
+
+  const letterEl = document.getElementById("letter");
+  letterEl.textContent = currentLetter;
+  letterEl.style.animation = "none";
+  // Force reflow so the animation restarts.
+  void letterEl.offsetWidth;
+  letterEl.style.animation = "";
+
+  restartTimer();
+}
+
+function restartTimer() {
+  timerStartedAt = Date.now();
+  updateTimerDisplay();
+}
+
+function updateTimerDisplay() {
+  const timerEl = document.getElementById("timer");
+  const elapsedSeconds = (Date.now() - timerStartedAt) / 1000;
+  const remaining = Math.ceil(TIMER_SECONDS - elapsedSeconds);
+
+  if (remaining <= 0) {
+    timerEl.style.visibility = "hidden";
+  } else {
+    timerEl.style.visibility = "visible";
+    timerEl.textContent = String(remaining);
+  }
+}
+
+function answer(result) {
+  const session = getSession(currentAlphabet);
+  recordAnswer(session, currentLetter, result, Date.now());
+  showNextLetter();
+}
+
+function switchAlphabet(alphabet) {
+  if (alphabet === currentAlphabet) {
+    return;
+  }
+  currentAlphabet = alphabet;
+  writeStorage("lw.alphabet", alphabet);
+  applyAlphabetToggle(alphabet);
+  showNextLetter();
+}
+
+function toggleTheme() {
+  const nextTheme = currentTheme === "light" ? "dark" : "light";
+  writeStorage("lw.theme", nextTheme);
+  applyTheme(nextTheme);
+}
+
+function init() {
+  currentAlphabet = readStorage("lw.alphabet", ["ru", "en"], "ru");
+  currentTheme = readStorage("lw.theme", ["light", "dark"], "light");
+
+  applyTheme(currentTheme);
+  applyAlphabetToggle(currentAlphabet);
+
+  document.getElementById("alphabet-ru").addEventListener("click", () => switchAlphabet("ru"));
+  document.getElementById("alphabet-en").addEventListener("click", () => switchAlphabet("en"));
+  document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
+  document.getElementById("know-button").addEventListener("click", () => answer("know"));
+  document.getElementById("dont-know-button").addEventListener("click", () => answer("dont_know"));
+
+  showNextLetter();
+  setInterval(updateTimerDisplay, TIMER_TICK_MS);
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", init);
+} else {
+  init();
+}
+</script>
+</body>
+</html>
