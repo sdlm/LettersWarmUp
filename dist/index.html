@@ -36,6 +36,7 @@ body {
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
 }
 
 .app {
@@ -43,7 +44,10 @@ body {
   flex-direction: column;
   height: 100%;    /* pre-15.4 Safari: resolves through html/body */
   height: 100dvh;  /* modern: tracks the collapsing toolbar */
-  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  padding: 12px
+           calc(16px + env(safe-area-inset-right))
+           calc(12px + env(safe-area-inset-bottom))
+           calc(16px + env(safe-area-inset-left));
 }
 
 .toggle-row {
@@ -131,8 +135,8 @@ body {
 <body>
 <div class="app">
   <div class="toggle-row">
-    <button type="button" id="alphabet-ru" class="alphabet-toggle">RU</button>
-    <button type="button" id="alphabet-en" class="alphabet-toggle">EN</button>
+    <button type="button" id="alphabet-ru" class="alphabet-toggle" aria-pressed="false">RU</button>
+    <button type="button" id="alphabet-en" class="alphabet-toggle" aria-pressed="false">EN</button>
     <button type="button" id="theme-toggle" class="theme-toggle" aria-label="Переключить тему"></button>
   </div>
 
@@ -274,8 +278,12 @@ function applyTheme(theme) {
 }
 
 function applyAlphabetToggle(alphabet) {
-  elements.alphabetRu.classList.toggle("active", alphabet === "ru");
-  elements.alphabetEn.classList.toggle("active", alphabet === "en");
+  const isRu = alphabet === "ru";
+  const isEn = alphabet === "en";
+  elements.alphabetRu.classList.toggle("active", isRu);
+  elements.alphabetRu.setAttribute("aria-pressed", String(isRu));
+  elements.alphabetEn.classList.toggle("active", isEn);
+  elements.alphabetEn.setAttribute("aria-pressed", String(isEn));
 }
 
 function showNextLetter() {
@@ -301,7 +309,7 @@ function restartTimer() {
 function updateTimerDisplay() {
   const timerEl = elements.timer;
   const elapsedSeconds = (Date.now() - timerStartedAt) / 1000;
-  const remaining = Math.ceil(TIMER_SECONDS - elapsedSeconds);
+  const remaining = Math.min(TIMER_SECONDS, Math.ceil(TIMER_SECONDS - elapsedSeconds));
 
   if (remaining <= 0) {
     timerEl.style.visibility = "hidden";
