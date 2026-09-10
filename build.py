@@ -42,8 +42,26 @@ def bundle_js() -> str:
     for name in MODULE_ORDER:
         text = (SRC / name).read_text(encoding="utf-8")
         kept_lines = []
-        for line in text.splitlines():
+        for lineno, line in enumerate(text.splitlines(), start=1):
             if line.startswith("import "):
+                # A single-line `import ... from "./x.js"` always carries
+                # its `from "` / `from '` clause on this same line. If it
+                # doesn't, this is the first line of a multi-line import,
+                # which this inliner's "single-line imports only" limit
+                # (see module docstring) does not support — the remaining
+                # lines of such an import (e.g. `} from "./x.js";`) don't
+                # start with "import " and would otherwise slip through as
+                # broken leftover JS with no import/export/require token
+                # for the later bundle-wide check to catch.
+                if 'from "' not in line and "from '" not in line:
+                    raise SystemExit(
+                        f"build.py: src/{name}:{lineno} looks like the "
+                        f"start of a multi-line import, which this "
+                        f"inliner doesn't support (see the "
+                        f"'single-line imports only' limitation in "
+                        f"build.py's module docstring): {line!r}. "
+                        f"Refusing to write a broken dist/index.html."
+                    )
                 continue
             if line.startswith("export "):
                 line = line[len("export "):]
