@@ -65,8 +65,12 @@ function applyTheme(theme) {
 }
 
 function applyAlphabetToggle(alphabet) {
-  elements.alphabetRu.classList.toggle("active", alphabet === "ru");
-  elements.alphabetEn.classList.toggle("active", alphabet === "en");
+  const isRu = alphabet === "ru";
+  const isEn = alphabet === "en";
+  elements.alphabetRu.classList.toggle("active", isRu);
+  elements.alphabetRu.setAttribute("aria-pressed", String(isRu));
+  elements.alphabetEn.classList.toggle("active", isEn);
+  elements.alphabetEn.setAttribute("aria-pressed", String(isEn));
 }
 
 function showNextLetter() {
@@ -92,7 +96,7 @@ function restartTimer() {
 function updateTimerDisplay() {
   const timerEl = elements.timer;
   const elapsedSeconds = (Date.now() - timerStartedAt) / 1000;
-  const remaining = Math.ceil(TIMER_SECONDS - elapsedSeconds);
+  const remaining = Math.min(TIMER_SECONDS, Math.ceil(TIMER_SECONDS - elapsedSeconds));
 
   if (remaining <= 0) {
     timerEl.style.visibility = "hidden";
