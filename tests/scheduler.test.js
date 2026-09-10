@@ -10,7 +10,10 @@ import {
 test("a letter not in history gets t=300, k=1, w=300", () => {
   const state = createSession();
   const weights = computeWeights(state, ["A", "B", "C"], 1_000_000);
-  const a = weights.find((x) => x.letter === "A");
+  // Positional lookup (not .find()) so the test also asserts that
+  // computeWeights returns results in the same order as `letters`.
+  const a = weights[0];
+  assert.equal(a.letter, "A");
   assert.equal(a.t, 300);
   assert.equal(a.k, 1);
   assert.equal(a.w, 300);
@@ -127,17 +130,17 @@ test("statistical run: empirical frequencies match w/total within 0.02", () => {
 
   const state = createSession();
   const nowMs = 1_000_000;
-  state.history["B"] = { answer: "know", closedAt: nowMs - 10_000 };
-  state.history["C"] = { answer: "dont_know", closedAt: nowMs - 10_000 };
-  // A: not in history -> w = 300
-  // B: know, t=10 -> w = 5
-  // C: dont_know, t=10 -> w = 20
+  // lastShown stays null so no letter has a forced zero weight.
+  // A: not in history                                -> t=300, k=1,   w=300
+  // B: know,      closedAt = nowMs - 400_000          -> t=400, k=0.5, w=200
+  // C: dont_know, closedAt = nowMs - 250_000          -> t=250, k=2,   w=500
+  // total = 1000 -> expected frequencies: A=0.30, B=0.20, C=0.50
+  // (hand-derived from the spec, not from computeWeights, so a wrong
+  // weight formula can't launder its own error into `expected`)
+  state.history["B"] = { answer: "know", closedAt: nowMs - 400_000 };
+  state.history["C"] = { answer: "dont_know", closedAt: nowMs - 250_000 };
   const letters = ["A", "B", "C"];
-  const weights = computeWeights(state, letters, nowMs);
-  const total = weights.reduce((sum, x) => sum + x.w, 0);
-  const expected = Object.fromEntries(
-    weights.map((x) => [x.letter, x.w / total]),
-  );
+  const expected = { A: 0.3, B: 0.2, C: 0.5 };
 
   const counts = { A: 0, B: 0, C: 0 };
   const iterations = 10_000;
