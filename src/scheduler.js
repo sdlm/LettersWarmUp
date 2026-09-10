@@ -1,3 +1,9 @@
+// Picks the next letter to practice. Each letter gets a weight w = t * k:
+//   t = seconds since the letter was last closed (0 if it was just shown)
+//   k = difficulty multiplier (2 if the child didn't know it, 0.5 if they did)
+// Probability of a letter is w / sum(w). No DOM, no clock, no storage:
+// `nowMs` and `rng` are injected so this module is deterministic under test.
+
 export function createSession() {
   return { history: {}, lastShown: null };
 }
@@ -14,9 +20,14 @@ export function computeWeights(state, letters, nowMs) {
     }
     const entry = state.history[letter];
     if (!entry) {
-      return { letter, t: 300, k: 1, w: 300 };
+      // Unseen letter: treat it as if it had been idle five minutes.
+      const t = 5 * 60;
+      return { letter, t, k: 1, w: t };
     }
-    const t = (nowMs - entry.closedAt) / 1000;
+    // Clamp at 0: a clock that has moved backwards (NTP correction, a
+    // child in the date settings) must never produce a negative weight.
+    const t = Math.max(0, (nowMs - entry.closedAt) / 1000);
+    // Anything other than "dont_know" (i.e. "know") is treated as known.
     const k = entry.answer === "dont_know" ? 2 : 0.5;
     return { letter, t, k, w: t * k };
   });

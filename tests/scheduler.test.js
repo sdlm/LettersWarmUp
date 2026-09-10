@@ -38,6 +38,16 @@ test("lastShown wins w=0 even when that letter is present in history", () => {
   assert.equal(b.w, 0);
 });
 
+test("lastShown gets k=1", () => {
+  const state = createSession();
+  state.history["B"] = { answer: "dont_know", closedAt: 500_000 };
+  state.lastShown = "B";
+  const b = computeWeights(state, ["A", "B", "C"], 1_000_000).find(
+    (x) => x.letter === "B",
+  );
+  assert.equal(b.k, 1);
+});
+
 test('answer "know" gives k=0.5; "dont_know" gives k=2', () => {
   const nowMs = 1_000_000;
   const state = createSession();
@@ -65,6 +75,21 @@ test("t grows with time: same history, larger nowMs gives larger w", () => {
     (x) => x.letter === "A",
   );
   assert.ok(later.w > earlier.w);
+});
+
+test("a clock that has moved backwards clamps t (and w) to 0, not negative", () => {
+  const state = createSession();
+  const nowMs = 1_000_000;
+  state.history["A"] = { answer: "know", closedAt: 2_000_000 };
+  state.history["B"] = { answer: "dont_know", closedAt: 2_000_000 };
+  const letters = ["A", "B"];
+  const weights = computeWeights(state, letters, nowMs);
+  for (const x of weights) {
+    assert.equal(x.t, 0);
+    assert.equal(x.w, 0);
+  }
+  const result = pickNext(state, letters, nowMs, () => 0);
+  assert.ok(letters.includes(result));
 });
 
 test("at the start of a session all weights are equal", () => {
@@ -95,11 +120,17 @@ test("pickNext with rng=() => 0 returns the first letter with non-zero weight", 
   assert.equal(result, "B");
 });
 
-test("pickNext with rng=() => 0.999999 returns the last letter with non-zero weight", () => {
+test("pickNext with rng=() => 0.999999 selects via the normal roulette walk, not the fall-through", () => {
   const state = createSession();
   state.lastShown = "C";
   const result = pickNext(state, ["A", "B", "C"], 1_000_000, () => 0.999999);
   assert.equal(result, "B");
+});
+
+test("floating-point fall-through returns the last non-zero letter", () => {
+  const state = createSession();
+  state.lastShown = "C";
+  assert.equal(pickNext(state, ["A", "B", "C"], 1_000_000, () => 1), "B");
 });
 
 test("pickNext never returns lastShown across a sweep of rng values", () => {
@@ -113,11 +144,20 @@ test("pickNext never returns lastShown across a sweep of rng values", () => {
   }
 });
 
-test("pickNext on a single-letter alphabet returns that letter without hanging", () => {
+test("pickNext on a single-letter alphabet falls back to the total===0 branch and still returns that letter", () => {
   const state = createSession();
   state.lastShown = "A";
   const result = pickNext(state, ["A"], 1_000_000, () => 0.5);
   assert.equal(result, "A");
+});
+
+test("when total weight is 0, pickNext picks uniformly via rng", () => {
+  const nowMs = 1_000_000;
+  const state = createSession();
+  state.history["A"] = { answer: "know", closedAt: nowMs }; // t=0
+  state.history["B"] = { answer: "know", closedAt: nowMs }; // t=0
+  assert.equal(pickNext(state, ["A", "B"], nowMs, () => 0), "A");
+  assert.equal(pickNext(state, ["A", "B"], nowMs, () => 0.9), "B");
 });
 
 test("statistical run: empirical frequencies match w/total within 0.02", () => {
