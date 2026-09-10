@@ -10,6 +10,8 @@ let currentTheme = "light";
 let currentLetter = null;
 let timerStartedAt = 0;
 
+let elements = null;
+
 function readStorage(key, allowedValues, fallback) {
   try {
     const value = localStorage.getItem(key);
@@ -37,18 +39,34 @@ function getSession(alphabet) {
   return sessions[alphabet];
 }
 
+function requireElement(id) {
+  const el = document.getElementById(id);
+  if (!el) {
+    throw new Error(`LettersWarmUp: missing required element #${id}`);
+  }
+  return el;
+}
+
+function collectElements() {
+  return {
+    alphabetRu: requireElement("alphabet-ru"),
+    alphabetEn: requireElement("alphabet-en"),
+    themeToggle: requireElement("theme-toggle"),
+    letter: requireElement("letter"),
+    timer: requireElement("timer"),
+    knowButton: requireElement("know-button"),
+    dontKnowButton: requireElement("dont-know-button"),
+  };
+}
+
 function applyTheme(theme) {
-  currentTheme = theme;
   document.documentElement.setAttribute("data-theme", theme);
-  const themeToggle = document.getElementById("theme-toggle");
-  themeToggle.textContent = theme === "dark" ? "☾" : "☼";
+  elements.themeToggle.textContent = theme === "dark" ? "☾" : "☼";
 }
 
 function applyAlphabetToggle(alphabet) {
-  const ruToggle = document.getElementById("alphabet-ru");
-  const enToggle = document.getElementById("alphabet-en");
-  ruToggle.classList.toggle("active", alphabet === "ru");
-  enToggle.classList.toggle("active", alphabet === "en");
+  elements.alphabetRu.classList.toggle("active", alphabet === "ru");
+  elements.alphabetEn.classList.toggle("active", alphabet === "en");
 }
 
 function showNextLetter() {
@@ -56,7 +74,7 @@ function showNextLetter() {
   const letters = ALPHABETS[currentAlphabet];
   currentLetter = pickNext(session, letters, Date.now(), Math.random);
 
-  const letterEl = document.getElementById("letter");
+  const letterEl = elements.letter;
   letterEl.textContent = currentLetter;
   letterEl.style.animation = "none";
   // Force reflow so the animation restarts.
@@ -72,7 +90,7 @@ function restartTimer() {
 }
 
 function updateTimerDisplay() {
-  const timerEl = document.getElementById("timer");
+  const timerEl = elements.timer;
   const elapsedSeconds = (Date.now() - timerStartedAt) / 1000;
   const remaining = Math.ceil(TIMER_SECONDS - elapsedSeconds);
 
@@ -84,9 +102,9 @@ function updateTimerDisplay() {
   }
 }
 
-function answer(result) {
+function handleAnswer(answer) {
   const session = getSession(currentAlphabet);
-  recordAnswer(session, currentLetter, result, Date.now());
+  recordAnswer(session, currentLetter, answer, Date.now());
   showNextLetter();
 }
 
@@ -102,22 +120,25 @@ function switchAlphabet(alphabet) {
 
 function toggleTheme() {
   const nextTheme = currentTheme === "light" ? "dark" : "light";
+  currentTheme = nextTheme;
   writeStorage("lw.theme", nextTheme);
   applyTheme(nextTheme);
 }
 
 function init() {
+  elements = collectElements();
+
   currentAlphabet = readStorage("lw.alphabet", ["ru", "en"], "ru");
   currentTheme = readStorage("lw.theme", ["light", "dark"], "light");
 
   applyTheme(currentTheme);
   applyAlphabetToggle(currentAlphabet);
 
-  document.getElementById("alphabet-ru").addEventListener("click", () => switchAlphabet("ru"));
-  document.getElementById("alphabet-en").addEventListener("click", () => switchAlphabet("en"));
-  document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
-  document.getElementById("know-button").addEventListener("click", () => answer("know"));
-  document.getElementById("dont-know-button").addEventListener("click", () => answer("dont_know"));
+  elements.alphabetRu.addEventListener("click", () => switchAlphabet("ru"));
+  elements.alphabetEn.addEventListener("click", () => switchAlphabet("en"));
+  elements.themeToggle.addEventListener("click", toggleTheme);
+  elements.knowButton.addEventListener("click", () => handleAnswer("know"));
+  elements.dontKnowButton.addEventListener("click", () => handleAnswer("dont_know"));
 
   showNextLetter();
   setInterval(updateTimerDisplay, TIMER_TICK_MS);
