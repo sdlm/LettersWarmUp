@@ -1,4 +1,4 @@
-import { ALPHABETS } from "./alphabets.js";
+import { ALPHABETS, HINTS } from "./alphabets.js";
 import { createSession, recordAnswer, pickNext } from "./scheduler.js";
 
 const TIMER_SECONDS = 5;
@@ -56,6 +56,8 @@ function collectElements() {
     themeToggle: requireElement("theme-toggle"),
     letter: requireElement("letter"),
     timer: requireElement("timer"),
+    nato: requireElement("nato"),
+    kid: requireElement("kid"),
     knowButton: requireElement("know-button"),
     dontKnowButton: requireElement("dont-know-button"),
   };
@@ -91,7 +93,21 @@ function showNextLetter() {
   void letterEl.offsetWidth;
   letterEl.style.animation = "";
 
+  const hint = currentHint();
+  elements.nato.textContent = hint ? hint.nato : "";
+  elements.kid.textContent = hint ? hint.kid : "";
+  setHintsVisible(false);
   restartTimer();
+}
+
+function currentHint() {
+  return HINTS[currentAlphabet]?.[currentLetter] ?? null;
+}
+
+function setHintsVisible(visible) {
+  const visibility = visible ? "visible" : "hidden";
+  elements.nato.style.visibility = visibility;
+  elements.kid.style.visibility = visibility;
 }
 
 function restartTimer() {
@@ -106,9 +122,11 @@ function updateTimerDisplay() {
 
   if (remaining <= 0) {
     timerEl.style.visibility = "hidden";
+    setHintsVisible(currentHint() !== null);
   } else {
     timerEl.style.visibility = "visible";
     timerEl.textContent = String(remaining);
+    setHintsVisible(false);
   }
 }
 

@@ -104,6 +104,17 @@ body {
   margin-top: 8px;
 }
 
+.hint {
+  font-size: 20px;
+  color: var(--muted);
+  visibility: hidden;
+}
+
+/* Keeps the line height when the hint text is empty, so the letter never moves. */
+.hint:empty::before {
+  content: "\00a0";
+}
+
 .button-row {
   display: flex;
   gap: 12px;
