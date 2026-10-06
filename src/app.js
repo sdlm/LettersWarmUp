@@ -3,6 +3,8 @@ import { createSession, recordAnswer, pickNext } from "./scheduler.js";
 
 const TIMER_SECONDS = 5;
 const TIMER_TICK_MS = 250;
+// Mirrors --bg in styles.css; used for the system bar of the installed app.
+const THEME_COLORS = { light: "#ffffff", dark: "#0b0b0b" };
 
 const sessions = {};
 let currentAlphabet = "ru";
@@ -62,6 +64,10 @@ function collectElements() {
 function applyTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
   elements.themeToggle.textContent = theme === "dark" ? "☾" : "☼";
+  const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+  if (themeColorMeta) {
+    themeColorMeta.setAttribute("content", THEME_COLORS[theme]);
+  }
 }
 
 function applyAlphabetToggle(alphabet) {
@@ -129,6 +135,34 @@ function toggleTheme() {
   applyTheme(nextTheme);
 }
 
+function registerServiceWorker() {
+  // Over file:// there is nothing to register; the single-file app works as is.
+  const servedOverHttp = location.protocol === "http:" || location.protocol === "https:";
+  if (!servedOverHttp || !("serviceWorker" in navigator)) {
+    return;
+  }
+  navigator.serviceWorker.register("sw.js").catch(() => {
+    // Offline support is a bonus; the app works without it.
+  });
+}
+
+function keepScreenAwake() {
+  if (!("wakeLock" in navigator)) {
+    return;
+  }
+  const acquire = () => {
+    if (document.visibilityState !== "visible") {
+      return;
+    }
+    navigator.wakeLock.request("screen").catch(() => {
+      // Denied (low battery, insecure context, policy) — the screen may dim.
+    });
+  };
+  // The browser drops the lock whenever the page is hidden; take it again on return.
+  document.addEventListener("visibilitychange", acquire);
+  acquire();
+}
+
 function init() {
   elements = collectElements();
 
@@ -146,6 +180,9 @@ function init() {
 
   showNextLetter();
   setInterval(updateTimerDisplay, TIMER_TICK_MS);
+
+  registerServiceWorker();
+  keepScreenAwake();
 }
 
 if (document.readyState === "loading") {
