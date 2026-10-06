@@ -117,6 +117,17 @@ body {
   margin-top: 8px;
 }
 
+.hint {
+  font-size: 20px;
+  color: var(--muted);
+  visibility: hidden;
+}
+
+/* Keeps the line height when the hint text is empty, so the letter never moves. */
+.hint:empty::before {
+  content: "\00a0";
+}
+
 .button-row {
   display: flex;
   gap: 12px;
@@ -149,6 +160,8 @@ body {
   <main class="letter-area">
     <div id="letter" class="letter"></div>
     <div id="timer" class="timer"></div>
+    <div id="nato" class="hint"></div>
+    <div id="kid" class="hint"></div>
   </main>
 
   <div class="button-row">
@@ -160,6 +173,37 @@ body {
 const ALPHABETS = {
   ru: "АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ".split(""),  // 32 letters, no Ё
   en: "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""),        // 26 letters
+};
+
+const HINTS = {
+  en: {
+    A: { nato: "Alfa",     kid: "apple" },
+    B: { nato: "Bravo",    kid: "banana" },
+    C: { nato: "Charlie",  kid: "carrot" },
+    D: { nato: "Delta",    kid: "doughnut" },
+    E: { nato: "Echo",     kid: "egg" },
+    F: { nato: "Foxtrot",  kid: "frog" },
+    G: { nato: "Golf",     kid: "grape" },
+    H: { nato: "Hotel",    kid: "honey" },
+    I: { nato: "India",    kid: "ice cream" },
+    J: { nato: "Juliett",  kid: "juice" },
+    K: { nato: "Kilo",     kid: "kiwi" },
+    L: { nato: "Lima",     kid: "lemon" },
+    M: { nato: "Mike",     kid: "mango" },
+    N: { nato: "November", kid: "nut" },
+    O: { nato: "Oscar",    kid: "orange" },
+    P: { nato: "Papa",     kid: "potato" },
+    Q: { nato: "Quebec",   kid: "queen" },
+    R: { nato: "Romeo",    kid: "rabbit" },
+    S: { nato: "Sierra",   kid: "strawberry" },
+    T: { nato: "Tango",    kid: "tomato" },
+    U: { nato: "Uniform",  kid: "umbrella" },
+    V: { nato: "Victor",   kid: "volcano" },
+    W: { nato: "Whiskey",  kid: "watermelon" },
+    X: { nato: "X-ray",    kid: "x-ray" },
+    Y: { nato: "Yankee",   kid: "yogurt" },
+    Z: { nato: "Zulu",     kid: "zebra" },
+  },
 };
 // Picks the next letter to practice. Each letter gets a weight w = t * k:
 //   t = seconds since the letter was last closed (0 if it was just shown)
@@ -275,6 +319,8 @@ function collectElements() {
     themeToggle: requireElement("theme-toggle"),
     letter: requireElement("letter"),
     timer: requireElement("timer"),
+    nato: requireElement("nato"),
+    kid: requireElement("kid"),
     knowButton: requireElement("know-button"),
     dontKnowButton: requireElement("dont-know-button"),
   };
@@ -310,7 +356,21 @@ function showNextLetter() {
   void letterEl.offsetWidth;
   letterEl.style.animation = "";
 
+  const hint = currentHint();
+  elements.nato.textContent = hint ? hint.nato : "";
+  elements.kid.textContent = hint ? hint.kid : "";
+  setHintsVisible(false);
   restartTimer();
+}
+
+function currentHint() {
+  return HINTS[currentAlphabet]?.[currentLetter] ?? null;
+}
+
+function setHintsVisible(visible) {
+  const visibility = visible ? "visible" : "hidden";
+  elements.nato.style.visibility = visibility;
+  elements.kid.style.visibility = visibility;
 }
 
 function restartTimer() {
@@ -325,9 +385,11 @@ function updateTimerDisplay() {
 
   if (remaining <= 0) {
     timerEl.style.visibility = "hidden";
+    setHintsVisible(currentHint() !== null);
   } else {
     timerEl.style.visibility = "visible";
     timerEl.textContent = String(remaining);
+    setHintsVisible(false);
   }
 }
 
