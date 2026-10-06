@@ -12,6 +12,7 @@ intentional scope, not an oversight.
 Usage: python3 build.py
 """
 
+import hashlib
 import re
 from pathlib import Path
 
@@ -35,6 +36,40 @@ SCRIPT_LINE = '<script type="module" src="app.js"></script>'
 # which contain "import"/"export"/"require" as English words in comments
 # or strings.
 LEFTOVER_TOKEN_RE = re.compile(r"\b(import|export|require)\b")
+
+
+# Service worker support. src/sw.js carries a placeholder for the cache
+# version and the list of app-shell URLs; the build fills in the version
+# and uses the same list to verify every precached file exists in dist/.
+CACHE_VERSION_PLACEHOLDER = "__CACHE_VERSION__"
+SHELL_PATH_RE = re.compile(r'"(\./[^"]*)"')
+
+
+def shell_files(sw_source: str) -> list[str]:
+    """Return the "./..." string literals in sw_source, in order."""
+    return SHELL_PATH_RE.findall(sw_source)
+
+
+def cache_version(paths: list[Path]) -> str:
+    """Hash file names and contents into a short, order-independent id."""
+    digest = hashlib.sha256()
+    for path in sorted(paths, key=lambda p: p.name):
+        digest.update(path.name.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()[:12]
+
+
+def render_sw(sw_source: str, version: str) -> str:
+    count = sw_source.count(CACHE_VERSION_PLACEHOLDER)
+    if count != 1:
+        raise SystemExit(
+            f"build.py: src/sw.js must contain the placeholder "
+            f"{CACHE_VERSION_PLACEHOLDER!r} exactly once, found {count}. "
+            f"Refusing to write a dist/sw.js that never invalidates its cache."
+        )
+    return sw_source.replace(CACHE_VERSION_PLACEHOLDER, version)
 
 
 def bundle_js() -> str:
