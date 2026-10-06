@@ -4,7 +4,7 @@
 // build.py replaces the version placeholder with a hash of dist/ contents,
 // so every rebuild that changes a file gets a fresh cache.
 
-const CACHE_VERSION = "ee657b71dd30";
+const CACHE_VERSION = "8a3461c73ee2";
 const CACHE_PREFIX = "letters-warmup-";
 const CACHE_NAME = CACHE_PREFIX + CACHE_VERSION;
 
