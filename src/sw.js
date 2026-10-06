@@ -18,10 +18,12 @@ const SHELL = [
 ];
 
 self.addEventListener("install", (event) => {
+  // Bypass the HTTP cache: Pages serves max-age=600, and a stale copy would
+  // otherwise be pinned under the new cache version until the next deploy.
   event.waitUntil(
     caches
       .open(CACHE_NAME)
-      .then((cache) => cache.addAll(SHELL))
+      .then((cache) => cache.addAll(SHELL.map((url) => new Request(url, { cache: "reload" }))))
       .then(() => self.skipWaiting())
   );
 });
