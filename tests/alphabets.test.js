@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ALPHABETS } from "../src/alphabets.js";
+import { ALPHABETS, HINTS } from "../src/alphabets.js";
 
 test("RU has exactly 32 letters, excludes Ё, includes Е", () => {
   assert.equal(ALPHABETS.ru.length, 32);
@@ -20,4 +20,21 @@ test("both alphabets have no duplicates and are uppercase", () => {
       assert.notEqual(ch, ch.toLowerCase());
     }
   }
+});
+
+test("EN hints cover exactly the EN letters", () => {
+  assert.deepEqual(Object.keys(HINTS.en).sort(), [...ALPHABETS.en].sort());
+});
+
+test("every EN hint word starts with its letter", () => {
+  for (const [letter, hint] of Object.entries(HINTS.en)) {
+    for (const word of [hint.nato, hint.kid]) {
+      assert.ok(word.length > 0, `${letter}: empty word`);
+      assert.equal(word[0].toUpperCase(), letter, `${letter}: ${word}`);
+    }
+  }
+});
+
+test("RU has no hints", () => {
+  assert.equal(HINTS.ru, undefined);
 });
